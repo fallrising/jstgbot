@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon src/bot.js",
-    "start": "node src/bot.js"
+    "dev": "nodemon bot.js",
+    "start": "node bot.js"
   },
   "author": "",
   "license": "ISC",
