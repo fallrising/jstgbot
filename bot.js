@@ -1,41 +1,35 @@
+require('dotenv').config();
 const { Bot } = require("grammy");
 const mqtt = require("mqtt");
 
-const bot = new Bot(
-  process.env.TELEGRAM_BOT_TOKEN || "your_telegram_bot_token"
-);
+// Load configuration from environment variables
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "your_telegram_bot_token";
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || "mqtt://broker.emqx.io:1883";
+const MQTT_TOPIC = process.env.MQTT_TOPIC || "telegram_bot_demo/messages";
+const KNOWN_TRACKING_PARAMS = new Set((process.env.KNOWN_TRACKING_PARAMS || '').split(',').filter(Boolean));
+const TRACKING_WORDS = (process.env.TRACKING_WORDS || '').split(',').filter(Boolean);
 
-// MQTT client setup using public EMQX broker
-const mqttClient = mqtt.connect("mqtt://broker.emqx.io:1883");
+const bot = new Bot(TELEGRAM_BOT_TOKEN);
+
+// MQTT client setup
+const mqttClient = mqtt.connect(MQTT_BROKER_URL);
 
 mqttClient.on("connect", () => {
-  console.log("Connected to public EMQX broker");
+  console.log("Connected to MQTT broker");
 });
 
-// Extended list of known tracking parameters
-const knownTrackingParams = new Set([
-  'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
-  'fbclid', 'gclid', '_ga', 'ref', 'source', 'spm', 'pvid', 'yclid',
-  'mktg_source', 'mktg_medium', 'mktg_campaign', 'itm_source', 'itm_medium',
-  'itm_campaign', 'adid', 'adtype', 'adpos', 'adgroup', 'ad_campaign'
-]);
-
 function isLikelyTrackingParam(param) {
-  // Check if the param contains words often used in tracking
-  const trackingWords = ['track', 'clk', 'click', 'ref', 'ad', 'src', 'source', 'medium', 'campaign'];
-  return trackingWords.some(word => param.toLowerCase().includes(word));
+  return TRACKING_WORDS.some(word => param.toLowerCase().includes(word));
 }
 
 function cleanUrl(dirtyUrl) {
   const url = new URL(dirtyUrl);
   const cleanParams = new URLSearchParams();
-
   for (const [key, value] of url.searchParams.entries()) {
-    if (!knownTrackingParams.has(key) && !isLikelyTrackingParam(key)) {
+    if (!KNOWN_TRACKING_PARAMS.has(key) && !isLikelyTrackingParam(key)) {
       cleanParams.append(key, value);
     }
   }
-
   url.search = cleanParams.toString();
   return url.toString();
 }
@@ -49,7 +43,6 @@ function extractUrls(text) {
 bot.on("message:text", async (ctx) => {
   const text = ctx.message.text;
   const urls = extractUrls(text);
-
   if (urls.length > 0) {
     const cleanedUrls = urls.map(cleanUrl);
     await ctx.reply(`Received ${cleanedUrls.length} URL(s):\n${cleanedUrls.join('\n')}`);
@@ -69,19 +62,18 @@ bot.on("message:document", async (ctx) => {
   
   // Get file info
   const file = await ctx.api.getFile(fileId);
-  const fileUrl = `https://api.telegram.org/file/bot${bot.token}/${file.file_path}`;
+  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file.file_path}`;
   
   sendToEMQX("file", { fileName, fileUrl });
 });
 
 function sendToEMQX(type, content) {
-  const topic = "telegram_bot_demo/messages";
   const message = JSON.stringify({ type, content });
-  mqttClient.publish(topic, message, (err) => {
+  mqttClient.publish(MQTT_TOPIC, message, (err) => {
     if (err) {
-      console.error("Error publishing to EMQX:", err);
+      console.error("Error publishing to MQTT:", err);
     } else {
-      console.log(`Message sent to EMQX on topic: ${topic}`);
+      console.log(`Message sent to MQTT on topic: ${MQTT_TOPIC}`);
     }
   });
 }
