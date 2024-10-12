@@ -1,13 +1,15 @@
 require('dotenv').config();
 const { Bot } = require("grammy");
 const mqtt = require("mqtt");
+const { v4: uuidv4 } = require('uuid');
 
 // Load configuration from environment variables
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "your_telegram_bot_token";
 const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || "mqtt://broker.emqx.io:1883";
 const MQTT_TOPIC = process.env.MQTT_TOPIC || "telegram_bot_demo/messages";
-const KNOWN_TRACKING_PARAMS = new Set((process.env.KNOWN_TRACKING_PARAMS || '').split(',').filter(Boolean));
-const TRACKING_WORDS = (process.env.TRACKING_WORDS || '').split(',').filter(Boolean);
+
+// Generate a UUID to replace the token in URLs
+const TOKEN_UUID = uuidv4();
 
 const bot = new Bot(TELEGRAM_BOT_TOKEN);
 
@@ -18,61 +20,20 @@ mqttClient.on("connect", () => {
   console.log("Connected to MQTT broker");
 });
 
-function isLikelyTrackingParam(param) {
-  return TRACKING_WORDS.some(word => param.toLowerCase().includes(word));
-}
-
-function cleanUrl(dirtyUrl) {
-  const url = new URL(dirtyUrl);
-  const cleanParams = new URLSearchParams();
-  for (const [key, value] of url.searchParams.entries()) {
-    if (!KNOWN_TRACKING_PARAMS.has(key) && !isLikelyTrackingParam(key)) {
-      cleanParams.append(key, value);
-    }
-  }
-  url.search = cleanParams.toString();
-  return url.toString();
-}
-
-function extractUrls(text) {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  return text.match(urlRegex) || [];
-}
-
-// Handling text messages
-bot.on("message:text", async (ctx) => {
-  const text = ctx.message.text;
-  const urls = extractUrls(text);
-  if (urls.length > 0) {
-    const cleanedUrls = urls.map(cleanUrl);
-    await ctx.reply(`Received ${cleanedUrls.length} URL(s):\n${cleanedUrls.join('\n')}`);
-    cleanedUrls.forEach(url => sendToEMQX("url", url));
-  } else {
-    await ctx.reply("Received text: " + text);
-  }
-});
-
-// Handling document messages (including bookmarks)
+// Handling document messages (including all file types)
 bot.on("message:document", async (ctx) => {
   const doc = ctx.message.document;
   const fileId = doc.file_id;
   const fileName = doc.file_name;
   const mimeType = doc.mime_type;
 
-  let fileType = "document";
-  if (mimeType.startsWith("image/")) {
-    fileType = "photo";
-  } else if (mimeType.startsWith("video/")) {
-    fileType = "video";
-  }
-
-  await ctx.reply(`Received ${fileType}: ${fileName}`);
+  await ctx.reply(`Received file of type ${mimeType}: ${fileName}`);
 
   // Get file info
   const file = await ctx.api.getFile(fileId);
-  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+  const fileUrl = `https://api.telegram.org/file/bot${TOKEN_UUID}/${file.file_path}`;
 
-  sendToEMQX(fileType, { fileName, fileUrl, mimeType });
+  sendToEMQX(mimeType, { fileName, fileUrl });
 });
 
 // Handling image messages
@@ -84,23 +45,24 @@ bot.on("message:photo", async (ctx) => {
 
   // Get file info
   const file = await ctx.api.getFile(fileId);
-  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+  const fileUrl = `https://api.telegram.org/file/bot${TOKEN_UUID}/${file.file_path}`;
 
-  sendToEMQX("image", { fileUrl });
+  sendToEMQX("image/jpeg", { fileUrl });
 });
 
 // Handling video messages
 bot.on("message:video", async (ctx) => {
   const fileId = ctx.message.video.file_id;
   const fileName = ctx.message.video.file_name || "video.mp4";
+  const mimeType = ctx.message.video.mime_type || "video/mp4";
 
   await ctx.reply(`Received a video: ${fileName}`);
 
   // Get file info
   const file = await ctx.api.getFile(fileId);
-  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+  const fileUrl = `https://api.telegram.org/file/bot${TOKEN_UUID}/${file.file_path}`;
 
-  sendToEMQX("video", { fileName, fileUrl });
+  sendToEMQX(mimeType, { fileName, fileUrl });
 });
 
 function sendToEMQX(type, content) {
@@ -116,3 +78,5 @@ function sendToEMQX(type, content) {
 
 // Starting the bot
 bot.start();
+
+console.log(`Using TOKEN_UUID: ${TOKEN_UUID}`);
