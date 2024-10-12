@@ -49,7 +49,6 @@ bot.on("message:text", async (ctx) => {
     cleanedUrls.forEach(url => sendToEMQX("url", url));
   } else {
     await ctx.reply("Received text: " + text);
-    sendToEMQX("text", text);
   }
 });
 
