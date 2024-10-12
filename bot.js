@@ -54,16 +54,25 @@ bot.on("message:text", async (ctx) => {
 
 // Handling document messages (including bookmarks)
 bot.on("message:document", async (ctx) => {
-  const fileId = ctx.message.document.file_id;
-  const fileName = ctx.message.document.file_name;
-  
-  await ctx.reply(`Received file: ${fileName}`);
-  
+  const doc = ctx.message.document;
+  const fileId = doc.file_id;
+  const fileName = doc.file_name;
+  const mimeType = doc.mime_type;
+
+  let fileType = "document";
+  if (mimeType.startsWith("image/")) {
+    fileType = "photo";
+  } else if (mimeType.startsWith("video/")) {
+    fileType = "video";
+  }
+
+  await ctx.reply(`Received ${fileType}: ${fileName}`);
+
   // Get file info
   const file = await ctx.api.getFile(fileId);
   const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-  
-  sendToEMQX("file", { fileName, fileUrl });
+
+  sendToEMQX(fileType, { fileName, fileUrl, mimeType });
 });
 
 // Handling image messages
