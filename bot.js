@@ -66,6 +66,34 @@ bot.on("message:document", async (ctx) => {
   sendToEMQX("file", { fileName, fileUrl });
 });
 
+// Handling image messages
+bot.on("message:photo", async (ctx) => {
+  const photoInfo = ctx.message.photo.pop(); // Get the highest quality photo
+  const fileId = photoInfo.file_id;
+
+  await ctx.reply("Received an image");
+
+  // Get file info
+  const file = await ctx.api.getFile(fileId);
+  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+
+  sendToEMQX("image", { fileUrl });
+});
+
+// Handling video messages
+bot.on("message:video", async (ctx) => {
+  const fileId = ctx.message.video.file_id;
+  const fileName = ctx.message.video.file_name || "video.mp4";
+
+  await ctx.reply(`Received a video: ${fileName}`);
+
+  // Get file info
+  const file = await ctx.api.getFile(fileId);
+  const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+
+  sendToEMQX("video", { fileName, fileUrl });
+});
+
 function sendToEMQX(type, content) {
   const message = JSON.stringify({ type, content });
   mqttClient.publish(MQTT_TOPIC, message, (err) => {
