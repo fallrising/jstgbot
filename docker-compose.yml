@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - bot-network
+
+networks:
+  bot-network:
+    driver: bridge

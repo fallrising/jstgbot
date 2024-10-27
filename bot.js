@@ -156,7 +156,7 @@ function sendToEMQX(type, content) {
 }
 
 // Starting the bot
-bot.start().then(r => {
+bot.start().then(() => {
   console.log("Bot is running");
 });
 
