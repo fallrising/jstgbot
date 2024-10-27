@@ -42,8 +42,37 @@ function cleanUrl(dirtyUrl) {
 }
 
 function extractUrls(text) {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  return text.match(urlRegex) || [];
+  // Break down the pattern into parts
+  const protocols = '(?:https?:\\/\\/)?';  // Optional http:// or https://
+  const www = '(?:www\\.)?';               // Optional www.
+  const domainName = '(?:[a-z0-9-]+\\.)+'; // One or more subdomain parts
+  const tld = '[a-z]{2,}';                 // Top-level domain (.com, .org, etc)
+  const path = '(?:\\/[^\\s]*)?';          // Optional path after domain
+
+  // Combine the parts
+  const urlPattern = new RegExp(
+      '\\b' +                // Word boundary
+      protocols +           // http://, https://, or nothing
+      www +                 // www. or nothing
+      domainName +          // domain parts (e.g., google., maps.google.)
+      tld +                 // Top-level domain
+      path,                 // Optional path
+      'gi'                  // Global, case-insensitive
+  );
+
+  // Extract URLs and process them
+  const matches = text.match(urlPattern) || [];
+
+  // Add missing protocols
+  return matches.map(url => {
+    // If URL doesn't start with a protocol, add https://
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      // Add www. if it's not present
+      const withWww = url.startsWith('www.') ? url : 'www.' + url;
+      return 'https://' + withWww;
+    }
+    return url;
+  });
 }
 
 // Handling text messages
